@@ -51,10 +51,6 @@ pip install ipython
 
 This code is distributed in the hope that it will be useful. It might be integrated into a topological data analysis pipeline to provide algebraic descriptors from data directly. 
 
-## Future features
-
-- [ ] Implementation of rank computation in finite fields
-
 ## References
 
 **[1]**: Asashiba, H., Gauthier, E., & Liu, E. _Interval Replacements of Persistence Modules._ arXiv preprint [arXiv:2403.08308](https://arxiv.org/abs/2403.08308) (2024). 
