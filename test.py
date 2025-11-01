@@ -39,13 +39,13 @@ class ComplexTest(unittest.TestCase):
         self.intervals = self.rep.list_int(conv=False)
 
     def test_evaluation_from_01_to_21(self):
-        assert (self.rep.evaluation((0, 1), (2, 1)) == [[0], [1]]).all()
+        assert np.array_equal(self.rep.evaluation((0, 1), (2, 1)), np.array([[0], [1]]))
 
     def test_evaluation_from_10_to_12(self):
-        assert (self.rep.evaluation((1, 0), (1, 2)) == [[0, 0], [0, 0]]).all()
+        assert np.array_equal(self.rep.evaluation((1, 0), (1, 2)), np.array([[0, 0], [0, 0]]))
 
     def test_evaluation_from_11_to_22(self):
-        assert (self.rep.evaluation((1, 1), (2, 2)) == [[1, 0], [0, 0]]).all()
+        assert np.array_equal(self.rep.evaluation((1, 1), (2, 2)), np.array([[1, 0], [0, 0]]))
 
     def test_number_of_generated_intervals(self):
         assert len(self.intervals) == 83
@@ -57,31 +57,37 @@ class ComplexTest(unittest.TestCase):
     def test_matrix_M_type_3_1(self):
         interval = Interval([(2, 0), (1, 1), (0, 2)], [(2, 2)])
         matrix = self.rep.construct_matrix_M_tot(interval)
-        assert (matrix == [[1., 0., -1., -0., 0.],
-                           [0., 1., -0., -1., 0.],
-                           [1., 0., 0., 0., -0.],
-                           [0., 0., 0., 0., -1.],
-                           [0., 0., 1., 0., -0.],
-                           [0., 0., 0., 0., -1.]]).all()
+        expected = np.array([[1., 0., -1., -0., 0.],
+                     [0., 1., -0., -1., 0.],
+                     [1., 0., 0., 0., -0.],
+                     [0., 0., 0., 0., -1.],
+                     [0., 0., 1., 0., -0.],
+                     [0., 0., 0., 0., -1.]])
+        matrix_np = np.array(matrix).astype(float)
+        assert np.array_equal(matrix_np, expected)
 
     def test_matrix_N_type_3_1(self):
         interval = Interval([(2, 0), (1, 1), (0, 2)], [(2, 2)])
         matrix = self.rep.construct_matrix_N_tot(interval)
-        assert (matrix == []).all()
+        assert np.array(matrix).size == 0
 
     def test_matrix_M_type_2_2(self):
         interval = Interval([(0, 1), (1, 0)], [(2, 1), (1, 2)])
         matrix = self.rep.construct_matrix_M_tot(interval)
-        assert (matrix == [[0., -0., -0.],
-                           [1., -0., -0.]]).all()
+        expected = np.array([[0., -0., -0.],
+                     [1., -0., -0.]])
+        matrix_np = np.array(matrix).astype(float)
+        assert np.array_equal(matrix_np, expected)
 
     def test_matrix_N_type_2_2(self):
         interval = Interval([(0, 1), (1, 0)], [(2, 1), (1, 2)])
         matrix = self.rep.construct_matrix_N_tot(interval)
-        assert (matrix == [[1.,  0.],
-                           [0.,  1.],
-                           [-1., -0.],
-                           [-0., -0.]]).all()
+        expected = np.array([[1.,  0.],
+                     [0.,  1.],
+                     [-1., -0.],
+                     [-0., -0.]])
+        matrix_np = np.array(matrix).astype(float)
+        assert np.array_equal(matrix_np, expected)
 
     def test_interval_rank_type_3_1(self):
         interval = Interval([(2, 0), (1, 1), (0, 2)], [(2, 2)])
@@ -102,3 +108,6 @@ class ComplexTest(unittest.TestCase):
                                         (((0, 2),), ((2, 2),)): 1,
                                         (((0, 1), (2, 0)), ((2, 1),)): 1,
                                         (((1, 1), (2, 0)), ((2, 2),)): 1}
+
+if __name__ == "__main__":
+    unittest.main()
