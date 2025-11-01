@@ -29,12 +29,12 @@ In the notebook, you will find how to:
 - **obtain the list of all intervals** thanks to `list_int` ;
 - **compute the interval rank** of a given interval. It is computed with the formula from **[1]** via rank computation of linear maps ;
 > [!NOTE]
-> Rank computations with `np.linalg` are done in $\mathbb{R}$. You can implement another rank computation algorithm like Gaussian eliminations to implement rank computation in finite fields for example. 
+> Rank computations are done in $\mathbb{R}$. You can adjust the rank computation algorithm to handle rank computation in finite fields for example. 
 - **compute the interval signed multiplicity** of a given interval via Möbius inversion, by computating the cover of the interval. Signed multiplicities yield the interval replacement of the persistence module.
 
 Additionally, we provide some **visualization** features for the quiver and its intervals.
 
-By default "total (tot)" compression system is used. To use "source-sink (ss)" insted, add a `compression` argument: `L.int_replacement(interval, compression='ss')`.
+By default "total (tot)" compression system is used. To use "source-sink (ss)" insted, add a `compression` argument: `R.int_replacement(interval, compression='ss')`.
 
 ## Installation
 
