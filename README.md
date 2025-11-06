@@ -38,10 +38,15 @@ By default "total (tot)" compression system is used. To use "source-sink (ss)" i
 
 ## Installation
 
-This implementation is built from scratch and does not depend on any external Python libraries except SimPy. You can install it with `pip` by running the following command:
+This implementation is built from scratch and does not depend on any external Python libraries except SimPy. You can install it with `pip` by running the following command in a terminal:
 ```
 pip install simpy
 ```
+
+To use the code, download **all the files** from this repository and place them in the **same folder**.
+You can then open and run the notebook **tutorial.ipynb**, which demonstrates how the code works on a specific example of a quiver representation.
+
+From there, you can easily modify the code in the notebook to compute the interval replacements for any representation you are interested in.
 
 ## Usage
 
