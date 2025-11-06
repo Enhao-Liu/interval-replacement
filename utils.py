@@ -271,7 +271,6 @@ class Representation:
                     list_int.append(Interval(tmp[0], tmp[1]))
         return list_int
 
-
     def int_rank(self, interval, compression='tot'):
         i, j = self.find_source_sink_indices_with_path(interval)
         new_src, new_snk = interval.src.copy(), interval.snk.copy()
@@ -334,7 +333,6 @@ class Representation:
 
         return symbolic_rank(block) - symbolic_rank(M_safe) - symbolic_rank(N_safe)
 
-
     # --- Interval replacement ---
     def int_replacement(self, interval, compression='tot'):
         repl = self.int_rank(interval, compression)
@@ -350,40 +348,68 @@ class Representation:
                 tmp = self.get_src_snk(c_flat[0])
                 i2 = Interval(tmp[0], tmp[1])
                 repl += (-1)**eps * self.int_rank(i2, compression)
-        return repl
+        return(repl)
 
-    # --- Cover, convexity, connectivity ---
     def cover(self, interval, conv=True):
+        """Compute the cover of an interval without duplicates."""
         cover_list = []
         hull = self.int_hull(interval)
-        potential_int = hull.copy()
-        for pt_idx in range(len(potential_int)):
-            if self.is_corner(potential_int[pt_idx], interval):
-                point = list(potential_int[pt_idx])
+        seen = set()  # Track seen intervals to avoid duplicates
+        
+        for point in hull:
+            if self.is_corner(point, interval):
+                # Try extending in each dimension
                 for i in range(len(self.dimensions)):
-                    val = point[i]
-                    if val != self.dimensions[i]-1:
-                        point[i] += 1
-                        potential_int.append(tuple(point))
-                        if tuple(point) not in hull and self.is_convex(potential_int):
-                            if conv:
-                                cover_list.append(potential_int)
-                            else:
-                                tmp = self.get_src_snk(potential_int)
-                                cover_list.append(Interval(tmp[0], tmp[1]))
-                        potential_int = hull.copy()
-                        point[i] = val
-                    if val != 0:
-                        point[i] -= 1
-                        potential_int.append(tuple(point))
-                        if tuple(point) not in hull and self.is_convex(potential_int):
-                            if conv:
-                                cover_list.append(potential_int)
-                            else:
-                                tmp = self.get_src_snk(potential_int)
-                                cover_list.append(Interval(tmp[0], tmp[1]))
-                        potential_int = hull.copy()
-                        point[i] = val
+                    # Try increasing coordinate
+                    if point[i] < self.dimensions[i] - 1:
+                        new_point = list(point)
+                        new_point[i] += 1
+                        new_point = tuple(new_point)
+                        
+                        if new_point not in hull:
+                            # Create new hull by adding the new point
+                            new_hull = hull + [new_point]
+                            if self.is_convex(new_hull):
+                                if conv:
+                                    # For point lists: use sorted tuple as signature
+                                    signature = tuple(sorted(new_hull))
+                                    if signature not in seen:
+                                        cover_list.append(new_hull)
+                                        seen.add(signature)
+                                else:
+                                    # For Interval objects: get sources/sinks
+                                    tmp = self.get_src_snk(new_hull)
+                                    new_interval = Interval(tmp[0], tmp[1])
+                                    sig = (tuple(sorted(new_interval.src)), tuple(sorted(new_interval.snk)))
+                                    if sig not in seen:
+                                        cover_list.append(new_interval)
+                                        seen.add(sig)
+                    
+                    # Try decreasing coordinate  
+                    if point[i] > 0:
+                        new_point = list(point)
+                        new_point[i] -= 1
+                        new_point = tuple(new_point)
+                        
+                        if new_point not in hull:
+                            # Create new hull by adding the new point
+                            new_hull = hull + [new_point]
+                            if self.is_convex(new_hull):
+                                if conv:
+                                    # For point lists: use sorted tuple as signature
+                                    signature = tuple(sorted(new_hull))
+                                    if signature not in seen:
+                                        cover_list.append(new_hull)
+                                        seen.add(signature)
+                                else:
+                                    # For Interval objects: get sources/sinks
+                                    tmp = self.get_src_snk(new_hull)
+                                    new_interval = Interval(tmp[0], tmp[1])
+                                    sig = (tuple(sorted(new_interval.src)), tuple(sorted(new_interval.snk)))
+                                    if sig not in seen:
+                                        cover_list.append(new_interval)
+                                        seen.add(sig)
+        
         return cover_list
 
     def is_convex(self, points):
@@ -413,6 +439,103 @@ class Representation:
                     dfs(neighbor)
         dfs(points[0])
         return all(node in visited for node in points)
+    
+    # --- Check validity of symbolic calculation ---
+    def find_complete_singularities(self, parameter):
+        """
+        Find all singular parameter values where interval replacement computations may change.
+        This identifies where symbolic computation cannot be simply substituted.
+        """
+        print("Identifying singular parameter values for interval replacement")
+        
+        all_intervals = self.list_int(conv=False)
+        print(f"Total intervals in quiver: {len(all_intervals)}")
+        
+        all_replacement_intervals = set()
+        
+        for interval in all_intervals:
+            all_replacement_intervals.add((tuple(sorted(interval.src)), tuple(sorted(interval.snk))))
+            
+            cover_intervals = self.cover(interval, conv=False)
+            for cov in cover_intervals:
+                all_replacement_intervals.add((tuple(sorted(cov.src)), tuple(sorted(cov.snk))))
+            
+            cov_ps = powerset(cover_intervals)
+            for c in cov_ps:
+                if len(c) > 1:
+                    all_points = []
+                    for interval_obj in c:
+                        hull_points = self.int_hull(interval_obj)
+                        all_points.extend(hull_points)
+                    unique_points = list(set(all_points))
+                    tmp = self.get_src_snk(unique_points)
+                    combined_int = Interval(tmp[0], tmp[1])
+                    all_replacement_intervals.add((tuple(sorted(combined_int.src)), tuple(sorted(combined_int.snk))))
+        
+        print(f"Total unique intervals in replacement formulas: {len(all_replacement_intervals)}")
+        
+        complete_singularities = set()
+        
+        def construct_block_matrix(rep, src, snk):
+            interval = Interval(list(src), list(snk))
+            i, j = rep.find_source_sink_indices_with_path(interval)
+            new_src, new_snk = interval.src.copy(), interval.snk.copy()
+            new_src[0], new_src[i] = new_src[i], new_src[0]
+            new_snk[0], new_snk[j] = new_snk[j], new_snk[0]
+            interval = Interval(new_src, new_snk)
+
+            M = rep.construct_matrix_M_ss(interval)
+            N = rep.construct_matrix_N_ss(interval)
+            mat = rep.evaluation(interval.src[0], interval.snk[0])
+
+            M_rows, M_cols = M.rows if M.rows > 0 else 1, M.cols if M.cols > 0 else 1
+            N_rows, N_cols = N.rows if N.rows > 0 else 1, N.cols if N.cols > 0 else 1
+
+            C = sp.zeros(max(mat.rows, N_rows), max(mat.cols, M_cols))
+            C[:mat.rows, :mat.cols] = mat
+
+            M_safe = M if M.rows > 0 and M.cols > 0 else sp.zeros(M_rows, M_cols)
+            N_safe = N if N.rows > 0 and N.cols > 0 else sp.zeros(N_rows, N_cols)
+            zeros_top_right = sp.zeros(M_rows, N_cols)
+
+            block = sp.BlockMatrix([[M_safe, zeros_top_right], [C, N_safe]]).as_explicit()
+            return block
+        
+        def find_singularities(matrix, param):
+            rows, cols = matrix.shape
+            max_rank = min(rows, cols)
+            singularities = set()
+            
+            for k in range(max_rank, 0, -1):
+                for row_indices in combinations(range(rows), k):
+                    for col_indices in combinations(range(cols), k):
+                        minor = matrix.extract(list(row_indices), list(col_indices))
+                        det = minor.det().simplify()
+                        
+                        if det != 0:
+                            solutions = sp.solve(det, param)
+                            for sol in solutions:
+                                try:
+                                    singularities.add(float(sol.evalf()))
+                                except:
+                                    singularities.add(sol)
+                            return singularities
+            return singularities
+        
+        for i, (src, snk) in enumerate(all_replacement_intervals):
+            if i % 20 == 19:
+                print(f"Progress: {i+1}/{len(all_replacement_intervals)}")
+                
+            try:
+                block = construct_block_matrix(self, src, snk)
+                singularities = find_singularities(block, parameter)
+                complete_singularities.update(singularities)
+            except:
+                continue
+        
+        print(f"Singular parameter values: {complete_singularities}")
+        
+        return complete_singularities
 
     # --- Utility ---
     def elements(self):
