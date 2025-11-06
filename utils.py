@@ -1,6 +1,5 @@
 import sympy as sp
 from itertools import combinations
-from sympy.utilities.iterables import multiset_partitions
 
 # --- Helper functions ---
 def powerset(elements):

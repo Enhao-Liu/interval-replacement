@@ -38,13 +38,9 @@ By default "total (tot)" compression system is used. To use "source-sink (ss)" i
 
 ## Installation
 
-This implementation is built from scratch and does not depend on any external Python libraries, except NumPy and IPython for visualization purpose in the tutorial. You can install them with `pip` by running the following commands:
+This implementation is built from scratch and does not depend on any external Python libraries except SimPy. You can install it with `pip` by running the following command:
 ```
-pip install numpy
-```
-and 
-```
-pip install ipython
+pip install simpy
 ```
 
 ## Usage
