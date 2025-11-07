@@ -29,6 +29,7 @@ class Representation:
         self.edges = self.generate_edges()
         self.vecs = {}  # dim of vector space at node
         self.mats = {}  # linear maps (symbolic matrices)
+        self.singularities = [] # used in symbolic calculation to store singularities
 
     # --- Grid and edges ---
     def generate_nodes(self):
@@ -533,8 +534,24 @@ class Representation:
                 continue
         
         print(f"Singular parameter values: {complete_singularities}")
+
+        self.singularities = complete_singularities
         
         return complete_singularities
+    
+    def has_symbols(self):
+        """Return True if the representation contains any symbolic variables, False otherwise."""
+        # Check matrices for symbols
+        for matrix in self.mats.values():
+            if matrix.has(sp.Symbol):
+                return True
+        
+        # Check vector space dimensions for symbols
+        for dim in self.vecs.values():
+            if isinstance(dim, sp.Expr) and dim.has(sp.Symbol):
+                return True
+        
+        return False
 
     # --- Utility ---
     def elements(self):
