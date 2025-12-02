@@ -141,6 +141,49 @@ class Representation:
                 return False
         return True
 
+##########################################
+# --- New feature, Liu ---
+    # --- Compute the dimension of an interval representation ---
+    def int_dim(self, interval):
+        return len(self.int_hull(interval))
+
+    # --- Compute the dimension of the input representation ---
+    def dim(self):
+        return sum(self.vecs[node] for node in self.nodes)
+        
+    # --- Find proper sources and sinks ---
+    def get_prop_src_snk(self, points):
+        '''
+        For each interval I, compute the source (resp. sink) of the proper up-set (down-set) of I 
+        '''
+        src_temp, snk_temp =  self.get_src_snk(points)
+        upset = Interval(src_temp, [self.nodes[-1]])
+        downset = Interval([self.nodes[0]], snk_temp)
+        prop_up = [x for x in self.int_hull(upset) if x not in points]
+        prop_down = [x for x in self.int_hull(downset) if x not in points]
+        prp_src = self.get_src_snk(prop_up)[0]
+        prp_snk = self.get_src_snk(prop_down)[1]
+        return prp_src, prp_snk
+
+    # --- Convert intervals of commutative ladders to dots or lines for the visualization purpose ---
+    def dot_line_trans(self, interval):
+        '''
+        For each interval I of commutative ladders, spliting interval types and outputing the information of endpoints
+        '''
+        points = self.int_hull(interval)
+
+        vals_0 = [v for c, v in points if c == 0]
+        vals_1 = [v for c, v in points if c == 1]
+        if vals_0 and not vals_1:
+            return [(max(vals_0) + 1, min(vals_0))]
+        elif vals_1 and not vals_0:
+            return [(min(vals_1), max(vals_1) + 1)]
+        else:
+            tuple_0 = (max(vals_0) + 1, min(vals_0))
+            tuple_1 = (min(vals_1), max(vals_1) + 1)
+            return [tuple_0, tuple_1]
+##########################################     
+
     # --- Evaluation of a path ---
     def evaluation(self, node1, node2):
         # handle empty vector spaces
@@ -332,6 +375,221 @@ class Representation:
             return 0
 
         return symbolic_rank(block) - symbolic_rank(M_safe) - symbolic_rank(N_safe)
+
+##########################################
+# --- New feature, Liu ---
+    # --- Choice map for proper sources and sinks --- 
+    def find_source_indices_per_proper_src(self, interval):
+        """
+        For each i in proper sources, find the first j in interval.src such that is_smaller(src[j], prp_src[i]) is True.
+        Returns a list choice_src, or None if no such j exists for that i.
+        """
+        choice_src = []
+        hull = self.int_hull(interval)
+        prop_src_list = self.get_prop_src_snk(hull)[0]
+
+        for i, prp_src_node in enumerate(prop_src_list):
+            for j, src_node in enumerate(interval.src):
+                if self.is_smaller(src_node, prp_src_node):
+                    choice_src.append(j)
+                    break
+            else:
+                # inner loop finished with no break
+                raise ValueError(f"No source found for proper source index i={i}.")
+
+        return choice_src
+
+    def find_sink_indices_per_proper_snk(self, interval):
+        """
+        For each i in proper sinks, find the first j in interval.snk such that is_smaller(prp_snk[i], snk[j]) is True.
+        Returns a list choice_snk, or None if no such j exists for that i.
+        """
+        choice_snk = []
+        hull = self.int_hull(interval)
+        prop_snk_list = self.get_prop_src_snk(hull)[1]
+
+        for i, prp_snk_node in enumerate(prop_snk_list):
+            for j, snk_node in enumerate(interval.snk):
+                if self.is_smaller(prp_snk_node, snk_node):
+                    choice_snk.append(j)
+                    break
+            else:
+                # inner loop finished with no break
+                raise ValueError(f"No sink found for proper sink index i={i}.")
+
+        return choice_snk
+
+    # --- Construct block matrices by using choice maps --- 
+    def construct_matrix_M_choice(self, interval):
+        """
+        Construct the block matrix M_choice for computing interval multiplicity
+        """
+        column_labels = interval.src
+        col_num = sum(self.vecs[node] for node in column_labels)
+        
+        hull = self.int_hull(interval)
+        prop_src_labels = self.get_prop_src_snk(hull)[0]
+        choice_src = self.find_source_indices_per_proper_src(interval)
+
+        # Interval does not have proper sources, return a zero matrix with size 1 × col_num
+        if not prop_src_labels:
+            return sp.zeros(1, col_num)
+
+        # Interval has proper sources
+        row_labels = prop_src_labels
+        row_num = sum(self.vecs[node] for node in row_labels)
+        M_choice = sp.zeros(row_num, col_num)
+
+        # Compute (start, end)-position of each column block in the bigger matrix
+        idx_col = {}
+        c_start = 0
+        for c in column_labels:
+            width = self.vecs[c]
+            idx_col[c] = (c_start, c_start + width)
+            c_start += width
+
+        # Replace corresponding zero blocks following row indexes and the choice map
+        r_current = 0
+        for i, prp_src_node in enumerate(row_labels):
+            height = self.vecs[prp_src_node]
+            r_next = r_current + height
+
+            j = choice_src[i]
+            src_node = column_labels[j]
+            c_start, c_end = idx_col[src_node]
+
+        # replace corresponding zero blocks
+            block = self.evaluation(src_node, prp_src_node)
+            M_choice[r_current:r_next, c_start:c_end] = block
+            r_current = r_next
+
+        return M_choice
+
+    def construct_matrix_N_choice(self, interval):
+        """
+        Construct the block matrix N_choice for computing interval multiplicity
+        """
+        row_labels = interval.snk
+        row_num = sum(self.vecs[node] for node in row_labels)
+        
+        hull = self.int_hull(interval)
+        prop_snk_labels = self.get_prop_src_snk(hull)[1]
+        choice_snk = self.find_sink_indices_per_proper_snk(interval)
+
+        # Interval does not have proper sinks, return a zero matrix with size row_num × 1
+        if not prop_snk_labels:
+            return sp.zeros(row_num, 1)
+
+        # Interval has proper sinks
+        column_labels = prop_snk_labels
+        col_num = sum(self.vecs[node] for node in column_labels)
+        N_choice = sp.zeros(row_num, col_num)
+
+        # Compute (start, end)-position of each row block in the bigger matrix
+        idx_row = {}
+        r_start = 0
+        for r in row_labels:
+            width = self.vecs[r]
+            idx_row[r] = (r_start, r_start + width)
+            r_start += width
+
+        # Replace corresponding zero blocks following column indexes and the choice map
+        c_current = 0
+        for i, prp_snk_node in enumerate(column_labels):
+            height = self.vecs[prp_snk_node]
+            c_next = c_current + height
+
+            j = choice_snk[i]
+            snk_node = row_labels[j]
+            r_start, r_end = idx_row[snk_node]
+
+        # replace corresponding zero blocks
+            block = self.evaluation(prp_snk_node, snk_node)
+            N_choice[r_start:r_end, c_current:c_next] = block
+            c_current = c_next
+
+        return N_choice
+
+    # --- Interval multiplicity --- 
+    def int_mult(self, interval):
+        i, j = self.find_source_sink_indices_with_path(interval)
+        new_src, new_snk = interval.src.copy(), interval.snk.copy()
+        new_src[0], new_src[i] = new_src[i], new_src[0]
+        new_snk[0], new_snk[j] = new_snk[j], new_snk[0]
+        interval = Interval(new_src, new_snk)
+        M_pair = self.construct_matrix_M_tot(interval)
+        M_choice = self.construct_matrix_M_choice(interval)
+        N_pair = self.construct_matrix_N_tot(interval)
+        N_choice = self.construct_matrix_N_choice(interval)
+        mat = self.evaluation(interval.src[0], interval.snk[0])
+
+        # Stack with choice matrices
+        M_safe = sp.BlockMatrix([[M_pair], [M_choice]]).as_explicit()
+        N_safe = sp.BlockMatrix([[N_choice, N_pair]]).as_explicit()
+        
+        # Create the top-right zero matrix
+        zeros_top_right = sp.zeros(M_safe.rows, N_safe.cols)
+
+        # Create C
+
+        total_rows = N_safe.rows
+        total_cols = M_safe.cols
+
+        C = sp.zeros(total_rows, total_cols)
+
+        if mat.rows > 0 and mat.cols > 0:
+            # 确保 mat 不会超出 C 的范围 (理论上不会，因为 mat 只是局部，C 是整体)
+            if mat.rows <= total_rows and mat.cols <= total_cols:
+                C[:mat.rows, :mat.cols] = mat
+            else:
+                 # 极端防御：如果计算出的 mat 居然比总维数还大，说明逻辑有深层错误
+                pass
+
+        # M_pair_rows, M_pair_cols = M_pair.rows if M_pair.rows > 0 else 1, M_pair.cols if M_pair.cols > 0 else 1
+        # N_pair_rows, N_pair_cols = N_pair.rows if N_pair.rows > 0 else 1, N_pair.cols if N_pair.cols > 0 else 1
+
+        # # Safe C matrix (match mat shape)
+        # C = sp.zeros(max(mat.rows, N_pair_rows), max(mat.cols, M_pair_cols))
+        # C[:mat.rows, :mat.cols] = mat
+
+        # # Safe zero blocks
+        # M_pair_safe = M_pair if M_pair.rows > 0 and M_pair.cols > 0 else sp.zeros(M_pair_rows, M_pair_cols)
+        # N_pair_safe = N_pair if N_pair.rows > 0 and N_pair.cols > 0 else sp.zeros(N_pair_rows, N_pair_cols)
+
+        
+
+        # Construct block matrix safely
+        block = sp.BlockMatrix([[M_safe, zeros_top_right], [C, N_safe]]).as_explicit()
+
+        def symbolic_rank(matrix):
+            """
+            Compute the symbolic rank of a (possibly rectangular) SymPy matrix.
+            Returns a sympy expression (Piecewise) depending on symbolic parameters.
+            """
+            rows, cols = matrix.shape
+            if rows == 0 or cols == 0:
+                return 0
+
+            # The rank is at most min(rows, cols)
+            max_rank = min(rows, cols)
+
+            # Check all square minors from largest to smallest
+            for k in range(max_rank, 0, -1):
+                # Generate all sets of k rows and k columns
+                from itertools import combinations
+                row_combinations = list(combinations(range(rows), k))
+                col_combinations = list(combinations(range(cols), k))
+
+                for r_idx in row_combinations:
+                    for c_idx in col_combinations:
+                        minor = matrix.extract(list(r_idx), list(c_idx))
+                        det = minor.det().simplify()
+                        if not det.is_zero:
+                            return sp.Piecewise((k, sp.Ne(det, 0)), (0, True))
+            return 0
+
+        return symbolic_rank(block) - symbolic_rank(M_safe) - symbolic_rank(N_safe)
+##########################################   
 
     # --- Interval replacement ---
     def int_replacement(self, interval, compression='tot'):
