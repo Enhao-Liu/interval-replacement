@@ -142,7 +142,6 @@ class Representation:
         return True
 
 ##########################################
-# --- New feature, Liu ---
     # --- Compute the dimension of an interval representation ---
     def int_dim(self, interval):
         return len(self.int_hull(interval))
@@ -377,7 +376,6 @@ class Representation:
         return symbolic_rank(block) - symbolic_rank(M_safe) - symbolic_rank(N_safe)
 
 ##########################################
-# --- New feature, Liu ---
     # --- Choice map for proper sources and sinks --- 
     def find_source_indices_per_proper_src(self, interval):
         """
@@ -590,7 +588,6 @@ class Representation:
 
         return symbolic_rank(block) - symbolic_rank(M_safe) - symbolic_rank(N_safe)
 ##########################################   
-
     # --- Interval replacement ---
     def int_replacement(self, interval, compression='tot'):
         repl = self.int_rank(interval, compression)
